@@ -12,7 +12,7 @@ our @EXPORT_OK = qw(deep_stringify);
 use Data::Structure::Util qw(get_refs unbless);
 use Scalar::Util          qw(blessed);
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 =head1 NAME
 
@@ -28,7 +28,7 @@ Stringify::Deep - Stringifies elements in data structures for easy serialization
       } ],
   };
 
-  deep_stringify($struct);
+  $struct = deep_stringify($struct);
 
   # $struct is now:
   # {
@@ -64,24 +64,30 @@ If this parameter is passed, Stringify::Deep will unbless and stringify objects 
 =cut
 
 sub deep_stringify {
-    my $struct = shift;
-    my $params = shift || {};
+    my $struct  = shift;
+    my $params  = shift || {};
+    my $reftype = ref $struct || '';
 
-    for my $elem ( @{ get_refs($struct) } ) {
-        my $reftype = ref $elem || '';
-
-        if (blessed $elem) {
-            my $overloaded = overload::Method( $elem, q{""} );
+    if ($reftype eq 'ARRAY') {
+        for my $i (0..scalar(@$struct) - 1) {
+            $struct->[$i] = deep_stringify($struct->[$i], $params);
+        }
+    } elsif ($reftype eq 'HASH') {
+        for my $key (keys %$struct) {
+            $struct->{$key} = deep_stringify($struct->{$key}, $params);
+        }
+    } else {
+        if (blessed $struct) {
+            my $overloaded = overload::Method( $struct, q{""} );
             if (!$overloaded and $params->{leave_unoverloaded_objects_intact}) {
-                unbless $elem;
-                $reftype = ref $elem || '';
-            } else {
-                $elem = "$elem";
+                unbless $struct;
+                $reftype = ref $struct || '';
             }
         }
 
         if ($reftype !~ /^(ARRAY|HASH)$/) {
-            $elem = "$elem";
+            $struct = "$struct"
+                if defined $struct;
         }
     }
 
